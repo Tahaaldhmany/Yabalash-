@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>يابلاش - Bani Waled</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --primary: #FF8C00; --bg: #FFFAF0; --white: #ffffff; --success: #2ecc71; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding-bottom: 50px; color: #333; }
+        .header { background: var(--primary); color: white; padding: 15px; font-size: 22px; font-weight: bold; text-align: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .card { background: var(--white); margin: 12px; padding: 18px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f1f1; }
+        input, select, textarea { width: 95%; padding: 12px; margin: 8px 0; border-radius: 10px; border: 1px solid #ddd; display: block; font-size: 16px; outline: none; }
+        button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 12px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: 0.3s; }
+        button:active { transform: scale(0.98); }
+        .hidden { display: none; }
+        #map { height: 280px; border-radius: 15px; margin: 10px 0; border: 2px solid var(--primary); }
+        .chat-box { height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 12px; margin-bottom: 10px; border-radius: 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+        .msg { padding: 8px 12px; border-radius: 15px; max-width: 80%; font-size: 14px; }
+        .msg.sent { background: var(--primary); color: white; align-self: flex-start; }
+        .msg.received { background: #eee; align-self: flex-end; }
+        .quick-actions { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; }
+        .quick-btn { width: auto; white-space: nowrap; padding: 8px 15px; font-size: 13px; background: #3498db; }
+        .balance-box { background: #e8f5e9; padding: 15px; border-radius: 15px; text-align: center; color: #2e7d32; font-weight: bold; font-size: 18px; border: 1px solid #c8e6c9; }
+    </style>
+</head>
+<body>
+
+<div class="header">🧡 يابلاش - التوصيل الذكي</div>
+
+<div id="auth-section" class="card">
+    <h3 style="text-align: center;">مرحباً بك في بني وليد</h3>
+    <input type="text" id="phoneInput" placeholder="أدخل رقم هاتفك">
+    <button onclick="handleLogin()">دخول للتطبيق</button>
+</div>
+
+<div id="role-section" class="hidden card">
+    <h3 style="text-align: center;">اختر كيف تريد البدء:</h3>
+    <button onclick="startApp('customer')" style="margin-bottom: 12px;">👤 أنا زبون (أريد طلب أغراض)</button>
+    <button onclick="startApp('courier')" style="background: var(--success);">🚗 أنا مندوب (أبحث عن عمل)</button>
+</div>
+
+<div id="customer-page" class="hidden">
+    <div class="card">
+        <h4>📍 موقع التسليم</h4>
+        <div id="map"></div>
+        <button onclick="getCurrentLocation()" style="background:#3498db;">📍 حدد موقعي الآن</button>
+        <p id="price-info" style="text-align: center; font-weight: bold; color: var(--primary);">سعر التوصيل الأساسي: 5 دينار</p>
+    </div>
+    <div class="card">
+        <h4>📝 تفاصيل الطلب</h4>
+        <input type="text" id="order
