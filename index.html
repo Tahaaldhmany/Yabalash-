@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>يابلاش - المصفوفة الكاملة</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --primary: #FF8C00; --admin-bg: #1a252f; --white: #ffffff; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #FFFAF0; margin: 0; padding-bottom: 20px; }
+        .header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; position: sticky; top: 0; z-index: 1000; }
+        .card { background: var(--white); margin: 12px; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+        
+        /* تصميم مصفوفة الطلب */
+        .matrix-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; font-size: 14px; color: #444; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1.5px solid #eee; border-radius: 10px; box-sizing: border-box; font-size: 16px; background: #fdfdfd; }
+        textarea { resize: none; }
+        
+        button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 12px; cursor: pointer; font-size: 17px; width: 100%; font-weight: bold; transition: 0.2s; margin-top: 10px; }
+        button:active { transform: scale(0.98); }
+        
+        #map { height: 260px; border-radius: 12px; border: 2px solid var(--primary); margin: 10px 0; }
+        .admin-item { border-right: 5px solid var(--admin-bg); padding: 10px; background: #f1f1f1; margin-bottom: 8px; border-radius: 5px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<div class="header" id="app-header">🧡 يابلاش - التوصيل الذكي</div>
+
+<div id="login-view" class="card">
+    <h3 style="text-align: center;">مرحباً بك في بني وليد</h3>
+    <input type="text" id="phoneInput" placeholder="أدخل رقم الهاتف أو كود المدير" value="0917652152">
+    <button id="entryBtn">دخول للتطبيق</button>
+</div>
+
+<div id="role-view" class="hidden card">
+    <h3 style="text-align: center;">اختر هويتك</h3>
+    <button id="customerBtn">👤 أنا زبون (أريد طلب أغراض)</button>
+    <button id="courierBtn" style="background: #2ecc71; margin-top: 12px;">🚗 أنا مندوب (أريد العمل)</button>
+</div>
+
+<div id="customer-view" class="hidden">
+    <div class="card">
+        <h4>📍 حدد موقع التسليم</h4>
+        <div id="map"></div>
+        <p style="font-size: 11px; color: #888;">* اضغط على الخريطة لتحديد منزلك بدقة</p>
+    </div>
+    
+    <div class="card">
+        <h4>📝 مصفوفة تفاصيل الطلب</h4>
+        
+        <div class="matrix-grid">
+            <div>
+                <label>🛒 صنف الطلب:</label>
+                <select id="m_type">
+                    <option value="مطعم">مطعم</option>
+                    <option value="مواد غذائية">مواد غذائية</option>
+                    <option value="لحوم/خضروات">خضروات</option>
+                    <option value="صيدلية">صيدلية</option>
+                </select>
+            </div>
+            <div>
+                <label>🔢 الكمية/العدد:</label>
+                <input type="number" id="m_qty" value="1" min="1">
+            </div>
+        </div>
+
+        <label style="margin-top:15px;">💬 ما هي الأغراض التي تريدها؟</label>
+        <textarea id="m_desc" rows="3" placeholder="مثال: 2 رز بالخلطة، 1 سلطة مشوية..."></textarea>
+
+        <div class="matrix-grid">
+            <div>
+                <label>💰 الميزانية التقريبية:</label>
+                <select id="m_price">
+                    <option value="أقل من 50">أقل من 50 د.ل</option>
+                    <option value="50-150">50 - 150 د.ل</option>
+                    <option value="150+">أكثر من 150 د.ل</option>
+                </select>
+            </div>
+            <div>
+                <label>💳 الدفع:</label>
+                <select id="m_pay">
+                    <option value="كاش">كاش</option>
+                    <option value="سداد">سداد/تداول</option>
+                </select>
+            </div>
+        </div>
+        
+        <button id="sendOrderBtn">إرسال المصفوفة للمناديب 🚀</button>
+    </div>
+</div>
+
+<div id="courier-view" class="hidden card">
+    <h4>📦 الطلبات المتوفرة الآن</h4>
+    <div id="orders-list">جاري البحث عن طلبات في بني وليد...</div>
+</div>
+
+<div id="admin-view" class="hidden card">
+    <h3 style="color: var(--admin-bg); text-align: center;">👑 لوحة التحكم العليا</h3>
+    <div id="admin-log">تحميل المصفوفة الكاملة للبيانات...</div>
+    <button onclick="location.reload()" style="background: #333; margin-top: 20px;">خروج آمن</button>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // بياناتك المسجلة في لقطة الشاشة
+    const firebaseConfig = {
+        apiKey: "AIzaSyDY9hKoNOaRnUSFzijVtafY2qcb-8pPgAs",
+        authDomain: "yabalash-ed0c1.firebaseapp.com",
+        projectId: "yabalash-ed0c1",
+        storageBucket: "yabalash-ed0c1.firebasestorage.app",
+        messagingSenderId: "881656538937",
+        appId: "1:881656538937:web:66f7604e638b80427aaae8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    let userPhone, map, marker;
+    const alertSnd = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
+
+    // تفعيل زر الدخول وكود المدير
+    document.getElementById('entryBtn').onclick = () => {
+        const input = document.getElementById('phoneInput').value.trim();
+        if(input === "##9900**") {
+            showView('admin-view');
+            document.getElementById('app-header').style.background = "#1a252f";
+            document.getElementById('app-header').innerText = "لوحة التحكم - يابلاش";
+            loadAdminData();
+        } else if(input.length >= 8) {
+            userPhone = input;
+            showView('role-view');
+        } else {
+            alert("يرجى إدخال رقم هاتف صحيح");
+        }
+    };
+
+    // التنقل بين الواجهات
+    document.getElementById('customerBtn').onclick = () => {
+        showView('customer-view');
+        initMap();
+    };
+
+    document.getElementById('courierBtn').onclick = () => {
+        showView('courier-view');
+        listenOrders();
+    };
+
+    function initMap() {
+        if(map) return;
+        map = L.map('map').setView([31.7583, 13.9875], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        map.on('click', (e) => {
+            if(marker) map.removeLayer(marker);
+            marker = L.marker(e.latlng).addTo(map);
+        });
+    }
+
+    // إرسال المصفوفة الكاملة لـ Firebase
+    document.getElementById('sendOrderBtn').onclick = async () => {
+        const desc = document.getElementById('m_desc').value;
+        if(!desc || !marker) return alert("يرجى وصف الطلب وتحديد الموقع!");
+        
+        await addDoc(collection(db, "orders"), {
+            customer: userPhone,
+            type: document.getElementById('m_type').value,
+            qty: document.getElementById('m_qty').value,
+            desc: desc,
+            budget: document.getElementById('m_price').value,
+            payment: document.getElementById('m_pay').value,
+            lat: marker.getLatLng().lat,
+            lng: marker.getLatLng().lng,
+            status: "pending",
+            time: serverTimestamp()
+        });
+        alert("تم إرسال مصفوفتك بنجاح! 🚀");
+        location.reload();
+    };
+
+    function listenOrders() {
+        const q = query(collection(db, "orders"), where("status", "==", "pending"));
+        onSnapshot(q, (sn) => {
+            if(!sn.empty) alertSnd.play();
+            const list = document.getElementById('orders-list');
+            list.innerHTML = "";
+            sn.forEach(d => {
+                const data = d.data();
+                list.innerHTML += `<div class="card" style="border-right: 5px solid #FF8C00;">
+                    <b>📦 طلب ${data.type}</b><br>
+                    الوصف: ${data.desc}<br>
+                    الكمية: ${data.qty} | الدفع: ${data.payment}<br>
+                    <button onclick="window.open('https://www.google.com/maps?q=${data.lat},${data.lng}')" style="background:#3498db; padding:8px; font-size:12px;">📍 تتبع العنوان</button>
+                    <button style="background:#2ecc71; margin-top:5px;">قبول ✅</button>
+                </div>`;
+            });
+        });
+    }
+
+    function loadAdminData() {
+        onSnapshot(collection(db, "orders"), (sn) => {
+            const log = document.getElementById('admin-log');
+            log.innerHTML = `<h4>إجمالي العمليات: ${sn.size}</h4>`;
+            sn.forEach(d => {
+                const data = d.data();
+                log.innerHTML += `<div class="admin-item">الهاتف: ${data.customer} | الطلب: ${data.desc}</div>`;
+            });
+        });
+    }
+
+    function showView(id) {
+        document.querySelectorAll('body > div:not(.header)').forEach(v => v.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</body>
+</html>
