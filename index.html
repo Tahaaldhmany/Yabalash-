@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yabalash | يابلاش للتوصيل</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --primary: #2ecc71; --secondary: #3498db; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f9f9f9; }
+        .header { background: var(--primary); color: white; padding: 15px; text-align: center; shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .container { padding: 20px; max-width: 800px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        #map { height: 300px; width: 100%; border-radius: 8px; margin: 10px 0; }
+        textarea { width: 100%; height: 80px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .order-item { border-right: 4px solid var(--secondary); background: #f0f7ff; padding: 15px; margin-bottom: 10px; border-radius: 5px; position: relative; }
+        .nav-tabs { display: flex; justify-content: space-around; background: #eee; padding: 10px; }
+        .nav-tabs div { cursor: pointer; padding: 5px 20px; border-radius: 20px; }
+        .active-tab { background: var(--primary); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="header"><h1>Yabalash 🚀</h1></div>
+
+<div class="nav-tabs">
+    <div id="tab-client" class="active-tab" onclick="switchTab('client')">أنا عميل</div>
+    <div id="tab-courier" onclick="switchTab('courier')">أنا مندوب</div>
+</div>
+
+<div class="container">
+    <div id="client-section">
+        <div class="card">
+            <h3>ماذا تريد أن تطلب؟</h3>
+            <textarea id="orderInput" placeholder="اكتب طلبك بالتفصيل هنا..."></textarea>
+            <p><small>حدد موقع التوصيل على الخريطة:</small></p>
+            <div id="map"></div>
+            <button onclick="submitOrder()">ارسل الطلب للمندوبين</button>
+        </div>
+    </div>
+
+    <div id="courier-section" style="display:none;">
+        <h3>طلبات بانتظار التوصيل 📦</h3>
+        <div id="ordersList">جاري البحث عن طلبات...</div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // المعلومات التي استخرجتها أنت من Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDY9hKoNOaRnUSFzijVtafY2qcb-8pPgAs",
+      authDomain: "yabalash-ed0c1.firebaseapp.com",
+      projectId: "yabalash-ed0c1",
+      storageBucket: "yabalash-ed0c1.firebasestorage.app",
+      messagingSenderId: "881656538937",
+      appId: "1:881656538937:web:66f7604e638b80427aaae8",
+      measurementId: "G-JVYS4EP0CH"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // إعداد الخريطة
+    var map = L.map('map').setView([24.7136, 46.6753], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var marker = L.marker([24.7136, 46.6753], {draggable: true}).addTo(map);
+
+    // وظيفة إرسال الطلب
+    window.submitOrder = async () => {
+        const orderText = document.getElementById('orderInput').value;
+        const pos = marker.getLatLng();
+        
+        if(!orderText) return alert("الرجاء كتابة طلبك");
+
+        try {
+            await addDoc(collection(db, "orders"), {
+                text: orderText,
+                location: { lat: pos.lat, lng: pos.lng },
+                status: "waiting",
+                timestamp: Date.now()
+            });
+            alert("تم نشر طلبك بنجاح!");
+            document.getElementById('orderInput').value = "";
+        } catch (e) { alert("خطأ في الإرسال: " + e); }
+    };
+
+    // وظيفة المندوب لمشاهدة الطلبات
+    const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const list = document.getElementById('ordersList');
+        list.innerHTML = "";
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            list.innerHTML += `
+                <div class="order-item">
+                    <p><strong>الطلب:</strong> ${data.text}</p>
+                    <button onclick="window.open('https://www.google.com/maps?q=${data.location.lat},${data.location.lng}')">فتح الموقع على الخريطة</button>
+                    <button style="background:#3498db; margin-top:5px;" onclick="alert('سيتم ربط تواصلك مع العميل قريباً')">قبول الطلب</button>
+                </div>`;
+        });
+    });
+</script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    function switchTab(role) {
+        document.getElementById('client-section').style.display = role === 'client' ? 'block' : 'none';
+        document.getElementById('courier-section').style.display = role === 'courier' ? 'block' : 'none';
+        document.getElementById('tab-client').className = role === 'client' ? 'active-tab' : '';
+        document.getElementById('tab-courier').className = role === 'courier' ? 'active-tab' : '';
+    }
+</script>
+</body>
+</html>
