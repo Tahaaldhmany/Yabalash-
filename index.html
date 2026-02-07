@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>يابلاش - المصفوفة الاحترافية</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --primary: #FF8C00; --secondary: #2c3e50; --success: #2ecc71; --bg: #FFFAF0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; }
+        .header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .card { background: white; margin: 15px; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+        
+        /* تصميم المصفوفة */
+        .matrix-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        label { font-weight: bold; font-size: 14px; color: #555; display: block; margin-top: 10px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        
+        button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 10px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: 0.3s; margin-top: 10px; }
+        button:hover { opacity: 0.9; }
+        
+        #map { height: 250px; border-radius: 12px; border: 2px solid var(--primary); margin: 10px 0; }
+        .order-item { border-right: 5px solid var(--primary); padding: 10px; background: #f9f9f9; margin-bottom: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="header" id="appHeader">🧡 يابلاش - بني وليد</div>
+
+<div id="view-login" class="card">
+    <h3 style="text-align: center;">تسجيل الدخول</h3>
+    <input type="text" id="phoneInput" placeholder="رقم الهاتف أو كود المدير">
+    <button onclick="router('login')">دخول للتطبيق</button>
+</div>
+
+<div id="view-role" class="hidden card">
+    <h3 style="text-align: center;">اختر نوع الحساب</h3>
+    <button onclick="router('go-customer')">👤 أنا زبون (أطلب الآن)</button>
+    <button onclick="router('go-courier')" style="background: var(--success);">🚗 أنا مندوب (أريد العمل)</button>
+</div>
+
+<div id="view-customer" class="hidden card">
+    <h4>📋 مصفوفة طلب جديد</h4>
+    
+    <label>📍 حدد موقع التسليم على الخريطة:</label>
+    <div id="map"></div>
+
+    <div class="matrix-container">
+        <div>
+            <label>🛒 نوع الطلب:</label>
+            <select id="m_type">
+                <option value="مطعم">مطعم</option>
+                <option value="مواد غذائية">مواد غذائية</option>
+                <option value="خضروات">خضروات/لحوم</option>
+                <option value="صيدلية">صيدلية</option>
+            </select>
+        </div>
+        <div>
+            <label>🔢 العدد/الكمية:</label>
+            <input type="number" id="m_qty" value="1">
+        </div>
+    </div>
+
+    <label>📝 تفاصيل الطلب (ماذا نحضر لك؟):</label>
+    <textarea id="m_detail" rows="3" placeholder="مثلاً: 2 رز بالخلطة، 1 سلطة..."></textarea>
+
+    <div class="matrix-container">
+        <div>
+            <label>💰 ميزانية السلع:</label>
+            <select id="m_budget">
+                <option value="50-">أقل من 50 د.ل</option>
+                <option value="50-150">50 - 150 د.ل</option>
+                <option value="150+">أكثر من 150 د.ل</option>
+            </select>
+        </div>
+        <div>
+            <label>💳 طريقة الدفع:</label>
+            <select id="m_pay">
+                <option value="كاش">كاش</option>
+                <option value="سداد/تداول">سداد / تداول</option>
+            </select>
+        </div>
+    </div>
+
+    <button onclick="router('send-order')">إرسال المصفوفة للمناديب 🚀</button>
+</div>
+
+<div id="view-courier" class="hidden card">
+    <h4>📦 الطلبات المتاحة حالياً</h4>
+    <div id="orders-display">جاري البحث عن طلبات...</div>
+</div>
+
+<div id="view-admin" class="hidden card">
+    <h3 style="color: var(--secondary);">👑 لوحة التحكم العليا</h3>
+    <div id="admin-monitor">تحميل كافة البيانات...</div>
+    <button onclick="location.reload()" style="background: #333;">تسجيل الخروج</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDY9hKoNOaRnUSFzijVtafY2qcb-8pPgAs",
+        authDomain: "yabalash-ed0c1.firebaseapp.com",
+        projectId: "yabalash-ed0c1",
+        storageBucket: "yabalash-ed0c1.firebasestorage.app",
+        messagingSenderId: "881656538937",
+        appId: "1:881656538937:web:66f7604e638b80427aaae8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    let userPhone, map, marker;
+    const alertSnd = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
+
+    // نظام التنقل (Router) الذي يحدد الأزرار أين تذهب
+    window.router = async (action) => {
+        const phone = document.getElementById('phoneInput').value.trim();
+        
+        if(action === 'login') {
+            if(phone === "##9900**") { // كود المدير السري
+                userPhone = "ADMIN";
+                switchView('view-admin');
+                document.getElementById('appHeader').style.background = "#2c3e50";
+                document.getElementById('appHeader').innerText = "لوحة المدير - يابلاش";
+                monitorAdmin();
+            } else if(phone.length >= 8) {
+                userPhone = phone;
+                switchView('view-role');
+            } else { alert("يرجى إدخال رقم هاتف صحيح"); }
+        }
+
+        if(action === 'go-customer') {
+            switchView('view-customer');
+            setTimeout(initMap, 100);
+        }
+
+        if(action === 'go-courier') {
+            switchView('view-courier');
+            listenOrders();
+        }
+
+        if(action === 'send-order') {
+            if(!marker) return alert("حدد موقعك على الخريطة أولاً!");
+            const doc = {
+                customer: userPhone,
+                type: document.getElementById('m_type').value,
+                qty: document.getElementById('m_qty').value,
+                detail: document.getElementById('m_detail').value,
+                budget: document.getElementById('m_budget').value,
+                payment: document.getElementById('m_pay').value,
+                lat: marker.getLatLng().lat,
+                lng: marker.getLatLng().lng,
+                status: 'pending',
+                time: serverTimestamp()
+            };
+            await addDoc(collection(db, "orders"), doc);
+            alert("تم إرسال مصفوفتك بنجاح! انتظر تواصل المندوب.");
+            location.reload();
+        }
+    };
+
+    function initMap() {
+        map = L.map('map').setView([31.7583, 13.9875], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        map.on('click', (e) => {
+            if(marker) map.removeLayer(marker);
+            marker = L.marker(e.latlng).addTo(map);
+        });
+    }
+
+    function listenOrders() {
+        const q = query(collection(db, "orders"), where("status", "==", "pending"));
+        onSnapshot(q, (sn) => {
+            if(!sn.empty) alertSnd.play();
+            const display = document.getElementById('orders-display');
+            display.innerHTML = "";
+            sn.forEach(d => {
+                const data = d.data();
+                display.innerHTML += `
+                    <div class="order-item">
+                        <b>📍 نوع الطلب: ${data.type}</b><br>
+                        📝 الوصف: ${data.detail}<br>
+                        🔢 العدد: ${data.qty} | 💰 الميزانية: ${data.budget}<br>
+                        <button onclick="window.open('https://www.google.com/maps?q=${data.lat},${data.lng}')" style="background:#3498db; font-size:12px;">تتبع الموقع</button>
+                        <button style="background:var(--success)">قبول الطلب ✅</button>
+                    </div>`;
+            });
+        });
+    }
+
+    function monitorAdmin() {
+        onSnapshot(collection(db, "orders"), (sn) => {
+            const monitor = document.getElementById('admin-monitor');
+            monitor.innerHTML = `<h4>إجمالي الطلبات: ${sn.size}</h4>`;
+            sn.forEach(d => {
+                const data = d.data();
+                monitor.innerHTML += `<div style="font-size:11px; border-bottom:1px solid #ccc; padding:5px;">
+                    الزبون: ${data.customer} | الطلب: ${data.type} - ${data.detail}
+                </div>`;
+            });
+        });
+    }
+
+    function switchView(id) {
+        document.querySelectorAll('body > div:not(.header)').forEach(v => v.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+</script>
+</body>
+</html>
