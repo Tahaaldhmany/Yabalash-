@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>يا بلاش - توصيل</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fff7f0;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 { color: #ff7a00; }
+    button {
+      background: #ff7a00;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin-top: 10px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 6px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    .box {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🚚 تطبيق يا بلاش</h2>
+
+<div class="box">
+  <label>اختر نوع المستخدم</label>
+  <select id="role">
+    <option value="customer">زبون</option>
+    <option value="driver">مندوب</option>
+  </select>
+</div>
+
+<div class="box">
+  <h3>إنشاء طلب</h3>
+  <input id="orderText" placeholder="اكتب الطلب أو تفاصيل التوصيل">
+  <select id="price">
+    <option value="أقل من 50">أقل من 50 دينار</option>
+    <option value="50-100">بين 50 و100</option>
+    <option value="أكثر من 100">أكثر من 100 دينار</option>
+  </select>
+  <select id="payment">
+    <option value="كاش">كاش</option>
+    <option value="تحويل">تحويل</option>
+  </select>
+  <button onclick="sendOrder()">إرسال الطلب 🔊</button>
+</div>
+
+<div class="box">
+  <h3>📦 الطلبات (للمندوب)</h3>
+  <ul id="orders"></ul>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDY9hKoNOaRnUSFzijVtafY2qcb-8pPgAs",
+    authDomain: "yabalash-ed0c1.firebaseapp.com",
+    projectId: "yabalash-ed0c1",
+    storageBucket: "yabalash-ed0c1.firebasestorage.app",
+    messagingSenderId: "881656538937",
+    appId: "1:881656538937:web:66f7604e638b80427aaae8"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.sendOrder = async function () {
+    const order = document.getElementById("orderText").value;
+    const price = document.getElementById("price").value;
+    const payment = document.getElementById("payment").value;
+    const role = document.getElementById("role").value;
+
+    if (!order) return alert("اكتب الطلب");
+
+    await addDoc(collection(db, "orders"), {
+      order,
+      price,
+      payment,
+      role,
+      status: "جديد",
+      time: Date.now()
+    });
+
+    new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg").play();
+    document.getElementById("orderText").value = "";
+  };
+
+  const list = document.getElementById("orders");
+  onSnapshot(collection(db, "orders"), (snap) => {
+    list.innerHTML = "";
+    snap.forEach(doc => {
+      const d = doc.data();
+      const li = document.createElement("li");
+      li.textContent = `${d.order} - ${d.price} - ${d.payment}`;
+      list.appendChild(li);
+    });
+  });
+</script>
+
+</body>
+</html>
